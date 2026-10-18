@@ -1,29 +1,72 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-import OpeningPage from "./opening_page";
-import AdminLogin from "./pages/AdminLogin";
-import AdminDashboard from "./pages/AdminDashboard";
-import AccountsCreate from "./pages/AccountsCreate";
+// Opening Page
+import OpeningPage from "./opening_page.jsx";
+
+// Admin Authentication
+import AdminLogin from "./pages/GMLogin.jsx";
+
+// GM Pages
+import AdminDashboard from "./pages/GM/AdminDashboard.jsx";
+import AdminManagement from "./pages/GM/AdminsManagement.jsx";
+import Reports from "./pages/GM/Reports.jsx";
+import CreateAdmin from "./pages/GM/CreateAdmin.jsx";
+
+// Responsibilities
+import CreateRider from "./pages/Responsibilities/CreateRider.jsx";
+import GMLogin from "./pages/GMLogin.jsx";
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Opening Page */}
+        <Route
+          path="/"
+          element={<OpeningPage />}
+        />
 
-        <Route path="/" element={<OpeningPage />} />
-
+        {/* Admin Login */}
         <Route
           path="/admin/login"
-          element={<AdminLogin />}
+          element={<GMLogin />}
         />
-        <Route
-  path="/admin/dashboard"
-  element={<AdminDashboard />}
-/>
-<Route
-  path="/admin/accounts/create"
-  element={<AccountsCreate />}
-/>
 
+        {/* GM Dashboard */}
+        <Route
+          path="/admin/dashboard"
+          element={<AdminDashboard />}
+        />
+
+        {/* Admin Management */}
+        <Route
+          path="/admin/admin-management"
+          element={<AdminManagement />}
+        />
+
+        {/* Organization Reports */}
+        <Route
+          path="/admin/reports"
+          element={<Reports />}
+        />
+
+        {/* Create Administrator */}
+        <Route
+          path="/admin/accounts/create"
+          element={<CreateAdmin />}
+        />
+
+        {/* Create Rider */}
+        <Route
+          path="/admin/create-rider"
+          element={<CreateRider />}
+        />
+
+        {/* Unknown Routes */}
+        <Route
+          path="*"
+          element={<Navigate to="/" replace />}
+        />
       </Routes>
     </BrowserRouter>
   );
