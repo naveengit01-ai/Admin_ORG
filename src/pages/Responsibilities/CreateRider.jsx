@@ -63,12 +63,12 @@ const getProfileImageUrl = (value) => {
     const host = url.hostname.toLowerCase();
 
     if (host === "drive.google.com" || host.endsWith(".drive.google.com")) {
-      const fileId =
+       const fileId =
         url.searchParams.get("id") ||
         url.pathname.match(/\/file\/d\/([^/]+)/)?.[1];
 
       if (fileId) {
-        return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
+        return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1000`;
       }
     }
 
@@ -88,6 +88,7 @@ export default function CreateRider() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [processingId, setProcessingId] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [selectedPhotoFailed, setSelectedPhotoFailed] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -459,10 +460,13 @@ export default function CreateRider() {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setSelectedPhoto({
-                                    url: getProfileImageUrl(request.profile_image),
-                                    name: `${request.first_name || ""} ${request.last_name || ""}`.trim(),
-                                  })
+                                  {
+                                    setSelectedPhotoFailed(false);
+                                    setSelectedPhoto({
+                                      url: getProfileImageUrl(request.profile_image),
+                                      name: `${request.first_name || ""} ${request.last_name || ""}`.trim(),
+                                    });
+                                  }
                                 }
                                 className="group h-14 w-14 shrink-0 overflow-hidden rounded-full border border-cyan-400/30 bg-slate-950 shadow-lg shadow-cyan-950/20 focus:outline-none focus:ring-2 focus:ring-cyan-400"
                                 aria-label={`View ${request.first_name || "rider"}'s profile photo`}
@@ -602,42 +606,60 @@ export default function CreateRider() {
 
         {selectedPhoto && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 backdrop-blur-md"
             role="dialog"
             aria-modal="true"
-            aria-label="Rider profile photo"
+            aria-label="Full-size rider profile photo"
             onClick={() => setSelectedPhoto(null)}
             onKeyDown={(event) => {
               if (event.key === "Escape") setSelectedPhoto(null);
             }}
+            tabIndex={-1}
           >
             <div
-              className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-4 shadow-2xl"
+              className="relative flex max-h-[92vh] w-full max-w-4xl flex-col items-center"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="mb-4 flex w-full items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Rider profile</p>
-                  <h2 className="mt-1 text-lg font-bold text-white">{selectedPhoto.name || "Rider"}</h2>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+                    Rider profile
+                  </p>
+                  <h2 className="mt-1 text-lg font-bold text-white">
+                    {selectedPhoto.name || "Rider"}
+                  </h2>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedPhoto(null)}
-                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  className="shrink-0 rounded-full border border-white/20 bg-slate-900/90 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white"
                   aria-label="Close photo viewer"
                 >
                   ✕ Close
                 </button>
               </div>
-              <img
-                src={selectedPhoto.url}
-                alt={`${selectedPhoto.name || "Rider"} profile photo enlarged`}
-                referrerPolicy="no-referrer"
-                className="mx-auto max-h-[70vh] w-full rounded-2xl bg-slate-950 object-contain"
-                onError={(event) => {
-                  event.currentTarget.alt = "Unable to load this image. Check that the Google Drive file is shared for viewing.";
-                }}
-              />
+
+              {selectedPhotoFailed ? (
+                <div className="flex min-h-56 w-full max-w-xl flex-col items-center justify-center rounded-2xl border border-white/10 bg-slate-900 p-8 text-center">
+                  <span className="text-4xl" aria-hidden="true">🖼️</span>
+                  <p className="mt-4 font-semibold text-white">Unable to load this profile photo</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    The saved image URL may be invalid, or the Google Drive file may not be available for viewing.
+                  </p>
+                </div>
+              ) : (
+                <img
+                  src={selectedPhoto.url}
+                  alt={`${selectedPhoto.name || "Rider"} profile photo enlarged`}
+                  referrerPolicy="no-referrer"
+                  className="max-h-[78vh] max-w-full rounded-2xl bg-slate-950 object-contain shadow-2xl"
+                  onError={() => setSelectedPhotoFailed(true)}
+                />
+              )}
+
+              <p className="mt-4 text-center text-xs text-slate-400">
+                Click outside the photo or press Escape to close
+              </p>
             </div>
           </div>
         )}
