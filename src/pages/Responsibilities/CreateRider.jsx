@@ -50,6 +50,34 @@ const formatDate = (date) => {
   });
 };
 
+// Google Drive links can be stored in different URL formats.
+// Normalize common formats so the browser can render the image.
+const getProfileImageUrl = (value) => {
+  if (typeof value !== "string" || !value.trim()) return "";
+
+  const raw = value.trim();
+  if (raw.startsWith("data:image/")) return raw;
+
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+
+    if (host === "drive.google.com" || host.endsWith(".drive.google.com")) {
+      const fileId =
+        url.searchParams.get("id") ||
+        url.pathname.match(/\/file\/d\/([^/]+)/)?.[1];
+
+      if (fileId) {
+        return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
+      }
+    }
+
+    return raw;
+  } catch {
+    return "";
+  }
+};
+
 export default function CreateRider() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
@@ -59,6 +87,7 @@ export default function CreateRider() {
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [processingId, setProcessingId] = useState(null);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -73,7 +102,13 @@ export default function CreateRider() {
         );
       }
 
-      setRequests(result.requests);
+      const requestList = Array.isArray(result.requests)
+        ? result.requests
+        : Array.isArray(result.data?.requests)
+          ? result.data.requests
+          : [];
+
+      setRequests(requestList);
     } catch (err) {
       console.error("Rider requests error:", err);
 
@@ -419,13 +454,49 @@ export default function CreateRider() {
                         className="transition hover:bg-white/[0.025]"
                       >
                         <td className="px-5 py-4">
-                          <p className="font-semibold">
-                            {request.first_name} {request.last_name}
-                          </p>
+                          <div className="flex items-center gap-3">
+                            {getProfileImageUrl(request.profile_image) ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedPhoto({
+                                    url: getProfileImageUrl(request.profile_image),
+                                    name: `${request.first_name || ""} ${request.last_name || ""}`.trim(),
+                                  })
+                                }
+                                className="group h-14 w-14 shrink-0 overflow-hidden rounded-full border border-cyan-400/30 bg-slate-950 shadow-lg shadow-cyan-950/20 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                                aria-label={`View ${request.first_name || "rider"}'s profile photo`}
+                                title="Click to view photo"
+                              >
+                                <img
+                                  src={getProfileImageUrl(request.profile_image)}
+                                  alt={`${request.first_name || "Rider"}'s profile`}
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  onError={(event) => {
+                                    event.currentTarget.style.display = "none";
+                                  }}
+                                  className="h-full w-full object-cover transition duration-300 group-hover:scale-110"
+                                />
+                              </button>
+                            ) : (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-xl font-black text-slate-400" aria-label="No profile photo">
+                                {(request.first_name || "R").charAt(0).toUpperCase()}
+                              </div>
+                            )}
 
-                          <p className="mt-1 text-xs text-slate-500">
-                            ID: {request._id}
-                          </p>
+                            <div className="min-w-0">
+                              <p className="font-semibold">
+                                {request.first_name} {request.last_name}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                ID: {request._id}
+                              </p>
+                              <p className="mt-1 text-[11px] text-cyan-400/80">
+                                {getProfileImageUrl(request.profile_image) ? "View profile photo" : "No photo available"}
+                              </p>
+                            </div>
+                          </div>
                         </td>
 
                         <td className="px-5 py-4">
@@ -528,6 +599,48 @@ export default function CreateRider() {
             </div>
           )}
         </section>
+
+        {selectedPhoto && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Rider profile photo"
+            onClick={() => setSelectedPhoto(null)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setSelectedPhoto(null);
+            }}
+          >
+            <div
+              className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-4 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Rider profile</p>
+                  <h2 className="mt-1 text-lg font-bold text-white">{selectedPhoto.name || "Rider"}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPhoto(null)}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  aria-label="Close photo viewer"
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <img
+                src={selectedPhoto.url}
+                alt={`${selectedPhoto.name || "Rider"} profile photo enlarged`}
+                referrerPolicy="no-referrer"
+                className="mx-auto max-h-[70vh] w-full rounded-2xl bg-slate-950 object-contain"
+                onError={(event) => {
+                  event.currentTarget.alt = "Unable to load this image. Check that the Google Drive file is shared for viewing.";
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         <footer className="mt-10 border-t border-white/[0.08] pt-6 text-center text-xs text-slate-500">
           DWJD Administration Portal · Rider Management
