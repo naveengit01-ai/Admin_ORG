@@ -16,6 +16,8 @@ import CreateAdmin from "./pages/GM/CreateAdmin.jsx";
 import CreateRider from "./pages/Responsibilities/CreateRider.jsx";
 import GMLogin from "./pages/GMLogin.jsx";
 
+import CreatePromotion from "./pages/Responsibilities/CreatePromotion";
+
 function App() {
   return (
     <BrowserRouter>
@@ -67,6 +69,11 @@ function App() {
           path="*"
           element={<Navigate to="/" replace />}
         />
+        <Route
+  path="/admin/create-promotion"
+  element={<CreatePromotion />}
+/>
+
       </Routes>
     </BrowserRouter>
   );

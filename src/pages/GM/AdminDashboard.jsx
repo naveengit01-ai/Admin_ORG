@@ -133,6 +133,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [directoryTab, setDirectoryTab] = useState("users");
+  const [responsibilitiesOpen, setResponsibilitiesOpen] = useState(false);
   const [directorySearch, setDirectorySearch] = useState("");
   const [directoryData, setDirectoryData] = useState({
     users: [],
@@ -387,13 +388,6 @@ const fetchDirectory = useCallback(async () => {
       color: "violet",
     },
     {
-      title: "Create Rider",
-      description: "Register a new delivery rider.",
-      icon: "↗",
-      route: "/admin/create-rider",
-      color: "emerald",
-    },
-    {
       title: "View Reports",
       description: "Review available system reports.",
       icon: "▤",
@@ -490,6 +484,55 @@ const fetchDirectory = useCallback(async () => {
                 {action.title}
               </button>
             ))}
+
+            {/* Expandable Responsibilities menu */}
+            <button
+              type="button"
+              onClick={() => setResponsibilitiesOpen((open) => !open)}
+              aria-expanded={responsibilitiesOpen}
+              className={`mb-1.5 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
+                responsibilitiesOpen
+                  ? "bg-indigo-50 text-indigo-700"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-sm">
+                ☷
+              </span>
+              <span className="flex-1">Responsibilities</span>
+              <span className={`text-xs transition-transform ${responsibilitiesOpen ? "rotate-180" : ""}`}>
+                ▾
+              </span>
+            </button>
+
+            {responsibilitiesOpen && (
+              <div className="mb-3 ml-4 space-y-1 border-l-2 border-indigo-100 pl-3">
+                {[
+                  {
+                    title: "Create Promotion",
+                    icon: "✦",
+                    route: "/admin/create-promotion",
+                  },
+                  {
+                    title: "Create Rider",
+                    icon: "↗",
+                    route: "/admin/create-rider",
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.title}
+                    type="button"
+                    onClick={() => navigate(item.route)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-500 transition hover:bg-indigo-50 hover:text-indigo-700"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 text-xs">
+                      {item.icon}
+                    </span>
+                    <span>{item.title}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mt-auto p-4">
