@@ -352,10 +352,20 @@ export default function CreatePromotion() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to accept "${ad.title || ad.brand_name}"?`
+    const defaultAmount = ad.approved_amount ?? ad.amount_paid ?? "";
+    const amountInput = window.prompt(
+      `Enter the approved campaign amount in INR for "${ad.title || ad.brand_name}":`,
+      String(defaultAmount)
     );
-
+    if (amountInput === null) return;
+    const approvedAmount = Number(amountInput);
+    if (!Number.isFinite(approvedAmount) || approvedAmount <= 0) {
+      setError("Approved amount must be a number greater than zero.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Approve this promotion for ${money(approvedAmount, "INR")} and require payment before activation?`
+    );
     if (!confirmed) return;
 
     setError("");
@@ -368,13 +378,14 @@ export default function CreatePromotion() {
         {
           method: "PATCH",
           headers: authHeaders,
+          body: JSON.stringify({ approved_amount: approvedAmount, currency: "INR" }),
         }
       );
 
       const result = await readResponse(response);
 
       setNotice(
-        result.message || "Promotion approved successfully."
+        result.message || "Promotion approved. Generate a payment link next."
       );
 
       await loadAds();
@@ -475,54 +486,37 @@ export default function CreatePromotion() {
   };
 
   // --------------------------------------------------
-  // ACTIVATE / DEACTIVATE
+  // GENERATE RAZORPAY PAYMENT LINK
   // --------------------------------------------------
 
-  const changeActive = async (ad) => {
+  const generatePaymentLink = async (ad) => {
     const id = ad._id || ad.id;
-
     if (!id) {
       setError("Promotion database ID is missing.");
       return;
     }
-
-    const nextActive = !ad.is_active;
-
-    if (
-      nextActive &&
-      (ad.status !== "approved" || ad.payment_status !== "paid")
-    ) {
-      setError(
-        "Only approved promotions with verified payment can be activated."
-      );
+    if (ad.status !== "approved") {
+      setError("Approve the promotion before generating a payment link.");
       return;
     }
+    if (ad.payment_status === "paid") {
+      setError("This promotion is already marked as paid.");
+      return;
+    }
+    if (!window.confirm(`Generate/send a Razorpay payment link for ${ad.brand_name || ad.title}?`)) return;
 
     setError("");
     setNotice("");
     setReviewingId(id);
-
     try {
       const response = await fetch(
-        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}/active`,
-        {
-          method: "PATCH",
-          headers: authHeaders,
-          body: JSON.stringify({
-            is_active: nextActive,
-          }),
-        }
+        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}/payment-link`,
+        { method: "POST", headers: authHeaders }
       );
-
       const result = await readResponse(response);
-
-      setNotice(
-        result.message ||
-          (nextActive
-            ? "Promotion activated successfully."
-            : "Promotion deactivated successfully.")
-      );
-
+      const link = result.payment_link_url || result.payment_link?.short_url || result.advertisement?.payment_link_url;
+      setNotice(result.message || "Payment link generated successfully.");
+      if (link) window.prompt("Razorpay payment link (copy it if needed):", link);
       await loadAds();
     } catch (err) {
       setError(err.message);
@@ -532,40 +526,35 @@ export default function CreatePromotion() {
   };
 
   // --------------------------------------------------
-  // DELETE PROMOTION
+  // ACTIVATE / DEACTIVATE
   // --------------------------------------------------
 
-  const deleteAd = async (ad) => {
+  const changeActive = async (ad) => {
     const id = ad._id || ad.id;
-
     if (!id) {
       setError("Promotion database ID is missing.");
       return;
     }
-
-    const confirmed = window.confirm(
-      `Delete "${ad.title || ad.brand_name}"? This action cannot be undone.`
-    );
-
-    if (!confirmed) return;
+    if (ad.is_active) {
+      setError("This backend currently exposes activation only. Deactivation requires a dedicated backend route.");
+      return;
+    }
+    if (ad.status !== "approved" || ad.payment_status !== "paid") {
+      setError("Only approved promotions with verified payment can be activated.");
+      return;
+    }
+    if (!window.confirm(`Activate "${ad.title || ad.brand_name}" now? The campaign must be within its scheduled dates.`)) return;
 
     setError("");
     setNotice("");
     setReviewingId(id);
-
     try {
       const response = await fetch(
-        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}`,
-        {
-          method: "DELETE",
-          headers: authHeaders,
-        }
+        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}/activate`,
+        { method: "PATCH", headers: authHeaders }
       );
-
       const result = await readResponse(response);
-
-      setNotice(result.message || "Promotion deleted successfully.");
-
+      setNotice(result.message || "Promotion activated successfully.");
       await loadAds();
     } catch (err) {
       setError(err.message);
@@ -647,7 +636,7 @@ export default function CreatePromotion() {
   const totalPaid = ads
     .filter((ad) => ad.payment_status === "paid")
     .reduce(
-      (sum, ad) => sum + Number(ad.amount_paid || 0),
+      (sum, ad) => sum + Number(ad.approved_amount ?? ad.amount_paid ?? 0),
       0
     );
 
@@ -1031,14 +1020,12 @@ export default function CreatePromotion() {
                   <Field label="Currency">
                     <select
                       name="currency"
-                      value={form.currency}
+                      value="INR"
                       onChange={updateField}
+                      disabled
                       className={inputClass}
                     >
-                      <option value="INR">INR — Indian Rupee</option>
-                      <option value="USD">USD — US Dollar</option>
-                      <option value="EUR">EUR — Euro</option>
-                      <option value="GBP">GBP — Pound Sterling</option>
+                      <option value="INR">INR — Indian Rupee (currently supported)</option>
                     </select>
                   </Field>
 
@@ -1072,7 +1059,7 @@ export default function CreatePromotion() {
 
                 <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
                   New campaigns are submitted as pending and inactive.
-                  Payment must be verified by the backend before activation.
+                  The amount is a requested amount. An administrator sets the final approved amount in INR. Payment must be verified by Razorpay webhook before activation.
                 </p>
               </section>
 
@@ -1299,7 +1286,7 @@ export default function CreatePromotion() {
                         {/* AMOUNT */}
 
                         <td className="px-5 py-4 text-sm font-bold text-slate-800">
-                          {money(ad.amount_paid, ad.currency || "INR")}
+                          {money(ad.approved_amount ?? ad.amount_paid, ad.currency || "INR")}
                         </td>
 
                         {/* PAYMENT */}
@@ -1378,17 +1365,28 @@ export default function CreatePromotion() {
                               </div>
                             )}
 
-                            {/* RE-REVIEW REJECTED PROMOTIONS */}
 
-                            {ad.status === "rejected" && (
+
+                            {/* PAYMENT LINK */}
+                            {ad.status === "approved" && ad.payment_status !== "paid" && (
                               <button
                                 type="button"
                                 disabled={isReviewing}
-                                onClick={() => approvePromotion(ad)}
-                                className="w-fit rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
+                                onClick={() => generatePaymentLink(ad)}
+                                className="w-fit rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
                               >
-                                Reconsider / Accept
+                                {isReviewing ? "Processing..." : ad.payment_link_url ? "Generate new payment link" : "Generate payment link"}
                               </button>
+                            )}
+                            {ad.payment_link_url && ad.payment_status !== "paid" && (
+                              <a
+                                href={ad.payment_link_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="w-fit text-xs font-semibold text-indigo-600 underline"
+                              >
+                                Open payment link
+                              </a>
                             )}
 
                             {/* ACTIVATION */}
@@ -1399,6 +1397,7 @@ export default function CreatePromotion() {
                                 checked={Boolean(ad.is_active)}
                                 disabled={
                                   isReviewing ||
+                                  ad.is_active ||
                                   ad.status !== "approved" ||
                                   ad.payment_status !== "paid"
                                 }
@@ -1410,16 +1409,7 @@ export default function CreatePromotion() {
                               Active
                             </label>
 
-                            {/* DELETE */}
 
-                            <button
-                              type="button"
-                              disabled={isReviewing}
-                              onClick={() => deleteAd(ad)}
-                              className="w-fit rounded-lg border border-rose-100 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
-                            >
-                              Delete
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1436,7 +1426,7 @@ export default function CreatePromotion() {
             </span>
 
             <span>
-              Only approved, paid, active campaigns should be shown publicly.
+Only approved, paid, active campaigns should be shown publicly. Deactivation and deletion are omitted until matching backend routes are added.
             </span>
           </div>
         </section>
