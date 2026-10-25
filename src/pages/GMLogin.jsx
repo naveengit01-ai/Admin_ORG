@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { adminLogin } from "../api.js";
@@ -12,9 +13,31 @@ function GMLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Reuse an existing admin session.
+  useEffect(() => {
+    const token = localStorage.getItem("adminToken");
+    const savedAdmin = localStorage.getItem("admin");
+
+    if (token && savedAdmin) {
+      try {
+        const admin = JSON.parse(savedAdmin);
+
+        if (admin && typeof admin === "object") {
+          navigate("/admin/dashboard", { replace: true });
+        } else {
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("admin");
+        }
+      } catch {
+        // Clear invalid stored session data.
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("admin");
+      }
+    }
+  }, [navigate]);
+
   const handleLogin = async (event) => {
     event.preventDefault();
-
     setError("");
 
     if (!username.trim() || !password) {
@@ -33,25 +56,31 @@ function GMLogin() {
       switch (result.status) {
         case "login_success": {
           if (!result.token || !result.admin) {
-            setError("The server returned an incomplete login response.");
+            setError(
+              "The server returned an incomplete login response."
+            );
             return;
           }
 
-          // Save the authenticated session.
+          // Store session information, never the password.
           localStorage.setItem("adminToken", result.token);
-          localStorage.setItem("admin", JSON.stringify(result.admin));
+          localStorage.setItem(
+            "admin",
+            JSON.stringify(result.admin)
+          );
 
-          // Route based on the account type returned by the backend.
           navigate("/admin/dashboard", { replace: true });
           break;
         }
 
         case "otp_required": {
           if (result.email) {
-            localStorage.setItem("adminVerifyEmail", result.email);
+            localStorage.setItem(
+              "adminVerifyEmail",
+              result.email
+            );
           }
 
-          // Keep the existing OTP verification flow.
           navigate("/admin/verify-otp");
           break;
         }
@@ -101,13 +130,12 @@ function GMLogin() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 text-white">
-
       {/* Background effects */}
       <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
 
       <div className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
 
-      {/* Login Card */}
+      {/* Login card */}
       <motion.div
         initial={{ opacity: 0, y: 25, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -115,7 +143,6 @@ function GMLogin() {
         className="relative z-10 w-full max-w-md"
       >
         <div className="rounded-3xl border border-white/10 bg-slate-900/90 p-7 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-10">
-
           {/* Logo */}
           <div className="text-center">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-400/20 bg-cyan-400/10 text-4xl shadow-lg shadow-cyan-900/10">
@@ -135,7 +162,7 @@ function GMLogin() {
             </p>
           </div>
 
-          {/* Error Message */}
+          {/* Error message */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
@@ -150,9 +177,8 @@ function GMLogin() {
             </motion.div>
           )}
 
-          {/* Login Form */}
+          {/* Login form */}
           <form onSubmit={handleLogin} className="mt-8 space-y-5">
-
             {/* Username */}
             <div>
               <label
@@ -169,7 +195,9 @@ function GMLogin() {
                 autoComplete="username"
                 placeholder="Enter your username"
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={(event) =>
+                  setUsername(event.target.value)
+                }
                 disabled={loading}
                 required
                 className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3.5 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-60"
@@ -193,7 +221,9 @@ function GMLogin() {
                   autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) =>
+                    setPassword(event.target.value)
+                  }
                   disabled={loading}
                   required
                   className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3.5 pr-20 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-60"
@@ -201,7 +231,9 @@ function GMLogin() {
 
                 <button
                   type="button"
-                  onClick={() => setShowPassword((previous) => !previous)}
+                  onClick={() =>
+                    setShowPassword((previous) => !previous)
+                  }
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-cyan-400 transition hover:bg-white/5 hover:text-cyan-300"
                 >
                   {showPassword ? "Hide" : "Show"}
@@ -231,7 +263,7 @@ function GMLogin() {
             </button>
           </form>
 
-          {/* Footer Actions */}
+          {/* Footer actions */}
           <div className="mt-7 border-t border-white/10 pt-6">
             <button
               type="button"
@@ -245,7 +277,6 @@ function GMLogin() {
               © {new Date().getFullYear()} DWJD Administration Portal
             </p>
           </div>
-
         </div>
       </motion.div>
     </div>
