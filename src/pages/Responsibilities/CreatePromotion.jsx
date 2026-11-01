@@ -1,34 +1,11 @@
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { BASE_URL } from "../../api.js";
 
-const INITIAL_FORM = {
-  brand_name: "",
-  company_name: "",
-  contact_person: "",
-  contact_email: "",
-  contact_phone: "",
-  company_website: "",
-  title: "",
-  description: "",
-  promotion_type: "banner",
-  image_url: "",
-  video_url: "",
-  target_url: "",
-  placement: "home_page",
-  start_date: "",
-  end_date: "",
-  amount_paid: "",
-  currency: "INR",
-  payment_status: "pending",
-  payment_reference: "",
-  collaboration_type: "paid_promotion",
-};
-
-const inputClass =
-  "mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50";
-
-const labelClass = "block text-sm font-semibold text-slate-700";
+// --------------------------------------------------
+// HELPERS
+// --------------------------------------------------
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -87,29 +64,13 @@ const readResponse = async (response) => {
 };
 
 const getItems = (result) => {
-  if (Array.isArray(result.advertisements)) {
-    return result.advertisements;
-  }
-
-  if (Array.isArray(result.ads)) {
-    return result.ads;
-  }
-
-  if (Array.isArray(result.data?.advertisements)) {
+  if (Array.isArray(result.advertisements)) return result.advertisements;
+  if (Array.isArray(result.ads)) return result.ads;
+  if (Array.isArray(result.data?.advertisements))
     return result.data.advertisements;
-  }
-
-  if (Array.isArray(result.data?.ads)) {
-    return result.data.ads;
-  }
-
-  if (Array.isArray(result.data)) {
-    return result.data;
-  }
-
-  if (Array.isArray(result.results)) {
-    return result.results;
-  }
+  if (Array.isArray(result.data?.ads)) return result.data.ads;
+  if (Array.isArray(result.data)) return result.data;
+  if (Array.isArray(result.results)) return result.results;
 
   return [];
 };
@@ -130,21 +91,17 @@ const statusStyle = (status) => {
   }
 };
 
-function Field({ label, required, children, className = "" }) {
-  return (
-    <label className={`${labelClass} ${className}`}>
-      {label}
-
-      {required && <span className="ml-1 text-rose-500">*</span>}
-
-      {children}
-    </label>
-  );
-}
+// --------------------------------------------------
+// METRIC CARD
+// --------------------------------------------------
 
 function Metric({ label, value, hint, icon }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
@@ -162,31 +119,35 @@ function Metric({ label, value, hint, icon }) {
           {icon}
         </span>
       </div>
-    </div>
+    </motion.div>
   );
 }
+
+// --------------------------------------------------
+// MAIN COMPONENT
+// --------------------------------------------------
 
 export default function CreatePromotion() {
   const token = localStorage.getItem("adminToken");
 
-  const [form, setForm] = useState(INITIAL_FORM);
   const [ads, setAds] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-
-  const [showForm, setShowForm] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
 
-  // Rejection modal state
+  // Rejection modal
   const [selectedAd, setSelectedAd] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [reviewingId, setReviewingId] = useState(null);
+
+  // --------------------------------------------------
+  // AUTH HEADERS
+  // --------------------------------------------------
 
   const authHeaders = useMemo(
     () => ({
@@ -235,108 +196,7 @@ export default function CreatePromotion() {
   }, [loadAds]);
 
   // --------------------------------------------------
-  // FORM HANDLING
-  // --------------------------------------------------
-
-  const updateField = (event) => {
-    const { name, value } = event.target;
-
-    setForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  };
-
-  const resetForm = () => {
-    setForm(INITIAL_FORM);
-  };
-
-  // --------------------------------------------------
-  // CREATE PROMOTION
-  // --------------------------------------------------
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    setError("");
-    setNotice("");
-
-    const start = new Date(form.start_date);
-    const end = new Date(form.end_date);
-    const amount = Number(form.amount_paid);
-
-    if (
-      !form.start_date ||
-      !form.end_date ||
-      Number.isNaN(start.getTime()) ||
-      Number.isNaN(end.getTime())
-    ) {
-      setError("Please enter valid campaign dates.");
-      return;
-    }
-
-    if (end <= start) {
-      setError("End date must be after the start date.");
-      return;
-    }
-
-    if (form.amount_paid === "" || !Number.isFinite(amount) || amount < 0) {
-      setError("Enter a valid campaign amount.");
-      return;
-    }
-
-    if (!token) {
-      setError("Your admin session is missing. Please sign in again.");
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const payload = {
-        ...form,
-        amount_paid: amount,
-
-        start_date: start.toISOString(),
-        end_date: end.toISOString(),
-
-        // All new campaigns require approval.
-        status: "pending",
-        rejection_reason: "",
-        is_active: false,
-
-        // Do not trust a client-submitted paid status.
-        payment_status: "pending",
-      };
-
-      const response = await fetch(
-        `${BASE_URL}/admin/advertisements`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const result = await readResponse(response);
-
-      setNotice(
-        result.message || "Promotion created successfully."
-      );
-
-      resetForm();
-      setShowForm(false);
-
-      await loadAds();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // ACCEPT PROMOTION
+  // APPROVE PROMOTION
   // --------------------------------------------------
 
   const approvePromotion = async (ad) => {
@@ -353,19 +213,30 @@ export default function CreatePromotion() {
     }
 
     const defaultAmount = ad.approved_amount ?? ad.amount_paid ?? "";
+
     const amountInput = window.prompt(
-      `Enter the approved campaign amount in INR for "${ad.title || ad.brand_name}":`,
+      `Enter the approved campaign amount in INR for "${
+        ad.title || ad.brand_name
+      }":`,
       String(defaultAmount)
     );
+
     if (amountInput === null) return;
+
     const approvedAmount = Number(amountInput);
+
     if (!Number.isFinite(approvedAmount) || approvedAmount <= 0) {
       setError("Approved amount must be a number greater than zero.");
       return;
     }
+
     const confirmed = window.confirm(
-      `Approve this promotion for ${money(approvedAmount, "INR")} and require payment before activation?`
+      `Approve this promotion for ${money(
+        approvedAmount,
+        "INR"
+      )} and require payment before activation?`
     );
+
     if (!confirmed) return;
 
     setError("");
@@ -374,18 +245,24 @@ export default function CreatePromotion() {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}/approve`,
+        `${BASE_URL}/admin/advertisements/${encodeURIComponent(
+          id
+        )}/approve`,
         {
           method: "PATCH",
           headers: authHeaders,
-          body: JSON.stringify({ approved_amount: approvedAmount, currency: "INR" }),
+          body: JSON.stringify({
+            approved_amount: approvedAmount,
+            currency: "INR",
+          }),
         }
       );
 
       const result = await readResponse(response);
 
       setNotice(
-        result.message || "Promotion approved. Generate a payment link next."
+        result.message ||
+          "Promotion approved. Generate a payment link next."
       );
 
       await loadAds();
@@ -418,7 +295,7 @@ export default function CreatePromotion() {
   };
 
   // --------------------------------------------------
-  // REJECT PROMOTION WITH REASON
+  // REJECT PROMOTION
   // --------------------------------------------------
 
   const rejectPromotion = async (event) => {
@@ -456,7 +333,9 @@ export default function CreatePromotion() {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}/reject`,
+        `${BASE_URL}/admin/advertisements/${encodeURIComponent(
+          id
+        )}/reject`,
         {
           method: "PATCH",
           headers: authHeaders,
@@ -491,32 +370,67 @@ export default function CreatePromotion() {
 
   const generatePaymentLink = async (ad) => {
     const id = ad._id || ad.id;
+
     if (!id) {
       setError("Promotion database ID is missing.");
       return;
     }
+
     if (ad.status !== "approved") {
-      setError("Approve the promotion before generating a payment link.");
+      setError(
+        "Approve the promotion before generating a payment link."
+      );
       return;
     }
+
     if (ad.payment_status === "paid") {
       setError("This promotion is already marked as paid.");
       return;
     }
-    if (!window.confirm(`Generate/send a Razorpay payment link for ${ad.brand_name || ad.title}?`)) return;
+
+    if (
+      !window.confirm(
+        `Generate/send a Razorpay payment link for ${
+          ad.brand_name || ad.title
+        }?`
+      )
+    ) {
+      return;
+    }
 
     setError("");
     setNotice("");
     setReviewingId(id);
+
     try {
       const response = await fetch(
-        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}/payment-link`,
-        { method: "POST", headers: authHeaders }
+        `${BASE_URL}/admin/advertisements/${encodeURIComponent(
+          id
+        )}/payment-link`,
+        {
+          method: "POST",
+          headers: authHeaders,
+        }
       );
+
       const result = await readResponse(response);
-      const link = result.payment_link_url || result.payment_link?.short_url || result.advertisement?.payment_link_url;
-      setNotice(result.message || "Payment link generated successfully.");
-      if (link) window.prompt("Razorpay payment link (copy it if needed):", link);
+
+      const link =
+        result.payment_link_url ||
+        result.payment_link?.short_url ||
+        result.advertisement?.payment_link_url;
+
+      setNotice(
+        result.message || "Payment link generated successfully."
+      );
+
+      if (link) {
+        window.prompt(
+          "Razorpay payment link (copy it if needed):",
+          link
+        );
+      }
+
       await loadAds();
     } catch (err) {
       setError(err.message);
@@ -526,35 +440,63 @@ export default function CreatePromotion() {
   };
 
   // --------------------------------------------------
-  // ACTIVATE / DEACTIVATE
+  // ACTIVATE PROMOTION
   // --------------------------------------------------
 
   const changeActive = async (ad) => {
     const id = ad._id || ad.id;
+
     if (!id) {
       setError("Promotion database ID is missing.");
       return;
     }
+
     if (ad.is_active) {
-      setError("This backend currently exposes activation only. Deactivation requires a dedicated backend route.");
+      setError(
+        "This backend currently exposes activation only. Deactivation requires a dedicated backend route."
+      );
       return;
     }
-    if (ad.status !== "approved" || ad.payment_status !== "paid") {
-      setError("Only approved promotions with verified payment can be activated.");
+
+    if (
+      ad.status !== "approved" ||
+      ad.payment_status !== "paid"
+    ) {
+      setError(
+        "Only approved promotions with verified payment can be activated."
+      );
       return;
     }
-    if (!window.confirm(`Activate "${ad.title || ad.brand_name}" now? The campaign must be within its scheduled dates.`)) return;
+
+    if (
+      !window.confirm(
+        `Activate "${ad.title || ad.brand_name}" now? The campaign must be within its scheduled dates.`
+      )
+    ) {
+      return;
+    }
 
     setError("");
     setNotice("");
     setReviewingId(id);
+
     try {
       const response = await fetch(
-        `${BASE_URL}/admin/advertisements/${encodeURIComponent(id)}/activate`,
-        { method: "PATCH", headers: authHeaders }
+        `${BASE_URL}/admin/advertisements/${encodeURIComponent(
+          id
+        )}/activate`,
+        {
+          method: "PATCH",
+          headers: authHeaders,
+        }
       );
+
       const result = await readResponse(response);
-      setNotice(result.message || "Promotion activated successfully.");
+
+      setNotice(
+        result.message || "Promotion activated successfully."
+      );
+
       await loadAds();
     } catch (err) {
       setError(err.message);
@@ -582,10 +524,13 @@ export default function CreatePromotion() {
         String(value || "").toLowerCase().includes(query)
       );
 
-      const status = String(ad.status || "pending").toLowerCase();
+      const status = String(
+        ad.status || "pending"
+      ).toLowerCase();
 
       const matchesStatus =
-        statusFilter === "all" || status === statusFilter;
+        statusFilter === "all" ||
+        status === statusFilter;
 
       const start = ad.start_date
         ? new Date(ad.start_date)
@@ -613,9 +558,17 @@ export default function CreatePromotion() {
         matchesDate = Boolean(end && end < now);
       }
 
-      return matchesSearch && matchesStatus && matchesDate;
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesDate
+      );
     });
   }, [ads, search, statusFilter, dateFilter]);
+
+  // --------------------------------------------------
+  // DASHBOARD COUNTS
+  // --------------------------------------------------
 
   const approvedCount = ads.filter(
     (ad) => ad.status === "approved"
@@ -636,7 +589,9 @@ export default function CreatePromotion() {
   const totalPaid = ads
     .filter((ad) => ad.payment_status === "paid")
     .reduce(
-      (sum, ad) => sum + Number(ad.approved_amount ?? ad.amount_paid ?? 0),
+      (sum, ad) =>
+        sum +
+        Number(ad.approved_amount ?? ad.amount_paid ?? 0),
       0
     );
 
@@ -666,10 +621,12 @@ export default function CreatePromotion() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              Create campaigns, review brand submissions, manage
-              payments, and control promotional placements.
+              Review brand submissions, manage payments,
+              and control promotional placements.
             </p>
           </div>
+
+          {/* ONLY REFRESH BUTTON */}
 
           <div className="flex flex-wrap gap-3">
             <button
@@ -679,18 +636,6 @@ export default function CreatePromotion() {
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
             >
               {loading ? "Refreshing…" : "↻ Refresh"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm((value) => !value);
-                setError("");
-                setNotice("");
-              }}
-              className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700"
-            >
-              {showForm ? "× Close form" : "+ Create promotion"}
             </button>
           </div>
         </motion.header>
@@ -763,349 +708,6 @@ export default function CreatePromotion() {
           />
         </section>
 
-        {/* CREATE PROMOTION FORM */}
-
-        {showForm && (
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
-          >
-            <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-50 via-white to-violet-50 px-6 py-5 sm:px-8">
-              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-indigo-600">
-                New campaign
-              </p>
-
-              <h2 className="mt-1 text-xl font-black">
-                Brand & promotion details
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Required fields are marked with an asterisk.
-              </p>
-            </div>
-
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-8 p-6 sm:p-8"
-            >
-              {/* BRAND CONTACT */}
-
-              <section>
-                <h3 className="mb-4 text-sm font-extrabold">
-                  1. Brand contact
-                </h3>
-
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                  <Field label="Brand name" required>
-                    <input
-                      name="brand_name"
-                      value={form.brand_name}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                      placeholder="Brand name"
-                    />
-                  </Field>
-
-                  <Field label="Registered company name" required>
-                    <input
-                      name="company_name"
-                      value={form.company_name}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                      placeholder="Company legal name"
-                    />
-                  </Field>
-
-                  <Field label="Contact person" required>
-                    <input
-                      name="contact_person"
-                      value={form.contact_person}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                      placeholder="Marketing manager"
-                    />
-                  </Field>
-
-                  <Field label="Business email" required>
-                    <input
-                      type="email"
-                      name="contact_email"
-                      value={form.contact_email}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                      placeholder="name@company.com"
-                    />
-                  </Field>
-
-                  <Field label="Contact phone" required>
-                    <input
-                      type="tel"
-                      name="contact_phone"
-                      value={form.contact_phone}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                      placeholder="+91..."
-                    />
-                  </Field>
-
-                  <Field label="Company website">
-                    <input
-                      type="url"
-                      name="company_website"
-                      value={form.company_website}
-                      onChange={updateField}
-                      className={inputClass}
-                      placeholder="https://company.com"
-                    />
-                  </Field>
-                </div>
-              </section>
-
-              {/* CREATIVE DETAILS */}
-
-              <section>
-                <h3 className="mb-4 text-sm font-extrabold">
-                  2. Creative & placement
-                </h3>
-
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                  <Field label="Campaign title" required>
-                    <input
-                      name="title"
-                      value={form.title}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                      placeholder="Summer campaign"
-                    />
-                  </Field>
-
-                  <Field label="Promotion type" required>
-                    <select
-                      name="promotion_type"
-                      value={form.promotion_type}
-                      onChange={updateField}
-                      className={inputClass}
-                    >
-                      <option value="banner">Banner</option>
-                      <option value="sponsored_post">Sponsored post</option>
-                      <option value="video">Video promotion</option>
-                      <option value="product_promotion">
-                        Product promotion
-                      </option>
-                      <option value="brand_awareness">
-                        Brand awareness
-                      </option>
-                    </select>
-                  </Field>
-
-                  <Field
-                    label="Description"
-                    required
-                    className="md:col-span-2"
-                  >
-                    <textarea
-                      name="description"
-                      value={form.description}
-                      onChange={updateField}
-                      required
-                      rows={3}
-                      className={inputClass}
-                      placeholder="Describe the campaign..."
-                    />
-                  </Field>
-
-                  <Field label="Banner / image URL">
-                    <input
-                      type="url"
-                      name="image_url"
-                      value={form.image_url}
-                      onChange={updateField}
-                      className={inputClass}
-                      placeholder="https://..."
-                    />
-                  </Field>
-
-                  <Field label="Video URL">
-                    <input
-                      type="url"
-                      name="video_url"
-                      value={form.video_url}
-                      onChange={updateField}
-                      className={inputClass}
-                      placeholder="https://..."
-                    />
-                  </Field>
-
-                  <Field label="Destination URL">
-                    <input
-                      type="url"
-                      name="target_url"
-                      value={form.target_url}
-                      onChange={updateField}
-                      className={inputClass}
-                      placeholder="https://brand.com/offer"
-                    />
-                  </Field>
-
-                  <Field label="Placement" required>
-                    <select
-                      name="placement"
-                      value={form.placement}
-                      onChange={updateField}
-                      className={inputClass}
-                    >
-                      <option value="home_page">Home page</option>
-                      <option value="donation_page">Donation page</option>
-                      <option value="pickup_page">Pickup page</option>
-                      <option value="rider_dashboard">
-                        Rider dashboard
-                      </option>
-                      <option value="all_pages">All pages</option>
-                    </select>
-                  </Field>
-                </div>
-              </section>
-
-              {/* COMMERCIAL TERMS */}
-
-              <section>
-                <h3 className="mb-4 text-sm font-extrabold">
-                  3. Schedule & commercial terms
-                </h3>
-
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                  <Field label="Start date and time" required>
-                    <input
-                      type="datetime-local"
-                      name="start_date"
-                      value={form.start_date}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                    />
-                  </Field>
-
-                  <Field label="End date and time" required>
-                    <input
-                      type="datetime-local"
-                      name="end_date"
-                      value={form.end_date}
-                      onChange={updateField}
-                      required
-                      className={inputClass}
-                    />
-                  </Field>
-
-                  <Field label="Campaign amount" required>
-                    <input
-                      type="number"
-                      name="amount_paid"
-                      value={form.amount_paid}
-                      onChange={updateField}
-                      required
-                      min="0"
-                      step="0.01"
-                      className={inputClass}
-                      placeholder="25000"
-                    />
-                  </Field>
-
-                  <Field label="Currency">
-                    <select
-                      name="currency"
-                      value="INR"
-                      onChange={updateField}
-                      disabled
-                      className={inputClass}
-                    >
-                      <option value="INR">INR — Indian Rupee (currently supported)</option>
-                    </select>
-                  </Field>
-
-                  <Field label="Collaboration type">
-                    <select
-                      name="collaboration_type"
-                      value={form.collaboration_type}
-                      onChange={updateField}
-                      className={inputClass}
-                    >
-                      <option value="paid_promotion">
-                        Paid promotion
-                      </option>
-                      <option value="sponsorship">Sponsorship</option>
-                      <option value="brand_partnership">
-                        Brand partnership
-                      </option>
-                    </select>
-                  </Field>
-
-                  <Field label="Payment reference">
-                    <input
-                      name="payment_reference"
-                      value={form.payment_reference}
-                      onChange={updateField}
-                      className={inputClass}
-                      placeholder="Invoice / transaction reference"
-                    />
-                  </Field>
-                </div>
-
-                <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-                  New campaigns are submitted as pending and inactive.
-                  The amount is a requested amount. An administrator sets the final approved amount in INR. Payment must be verified by Razorpay webhook before activation.
-                </p>
-              </section>
-
-              {/* BANNER PREVIEW */}
-
-              {form.image_url && (
-                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Banner preview
-                  </p>
-
-                  <img
-                    src={form.image_url}
-                    alt="Promotion banner preview"
-                    className="max-h-56 max-w-full rounded-xl object-contain"
-                    onError={(event) => {
-                      event.currentTarget.style.display = "none";
-                    }}
-                  />
-                </section>
-              )}
-
-              <div className="flex flex-col-reverse justify-end gap-3 border-t border-slate-100 pt-6 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetForm();
-                    setShowForm(false);
-                  }}
-                  className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-extrabold text-white transition hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {saving ? "Saving promotion…" : "Create promotion"}
-                </button>
-              </div>
-            </form>
-          </motion.section>
-        )}
-
         {/* CAMPAIGN DIRECTORY */}
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -1121,18 +723,24 @@ export default function CreatePromotion() {
                 </p>
               </div>
 
+              {/* SEARCH AND FILTERS */}
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[620px]">
                 <input
                   type="search"
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) =>
+                    setSearch(event.target.value)
+                  }
                   placeholder="Search brand or campaign..."
                   className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-indigo-400"
                 />
 
                 <select
                   value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value)
+                  }
                   className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm"
                 >
                   <option value="all">All review statuses</option>
@@ -1144,7 +752,9 @@ export default function CreatePromotion() {
 
                 <select
                   value={dateFilter}
-                  onChange={(event) => setDateFilter(event.target.value)}
+                  onChange={(event) =>
+                    setDateFilter(event.target.value)
+                  }
                   className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm"
                 >
                   <option value="all">Any schedule</option>
@@ -1156,12 +766,16 @@ export default function CreatePromotion() {
             </div>
           </div>
 
+          {/* LOADING */}
+
           {loading ? (
             <div className="flex items-center justify-center gap-3 py-16 text-sm text-slate-500">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-100 border-t-indigo-600" />
               Loading campaigns...
             </div>
           ) : filteredAds.length === 0 ? (
+            /* EMPTY STATE — NO CREATE BUTTON */
+
             <div className="px-6 py-16 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-2xl text-indigo-600">
                 ✦
@@ -1176,20 +790,12 @@ export default function CreatePromotion() {
               <p className="mt-1 text-sm text-slate-500">
                 {ads.length
                   ? "Try changing your search or filters."
-                  : "Create your first brand promotion to get started."}
+                  : "There are currently no brand promotions to review."}
               </p>
-
-              {!ads.length && (
-                <button
-                  type="button"
-                  onClick={() => setShowForm(true)}
-                  className="mt-5 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white"
-                >
-                  + Create first promotion
-                </button>
-              )}
             </div>
           ) : (
+            /* CAMPAIGN TABLE */
+
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1250px] text-left">
                 <thead>
@@ -1217,7 +823,9 @@ export default function CreatePromotion() {
                 <tbody className="divide-y divide-slate-100">
                   {filteredAds.map((ad, index) => {
                     const id =
-                      ad._id || ad.id || `${ad.title}-${index}`;
+                      ad._id ||
+                      ad.id ||
+                      `${ad.title}-${index}`;
 
                     const isReviewing = reviewingId === id;
 
@@ -1236,7 +844,8 @@ export default function CreatePromotion() {
                                 alt=""
                                 className="h-12 w-16 rounded-lg border border-slate-200 object-cover"
                                 onError={(event) => {
-                                  event.currentTarget.style.display = "none";
+                                  event.currentTarget.style.display =
+                                    "none";
                                 }}
                               />
                             ) : (
@@ -1247,7 +856,9 @@ export default function CreatePromotion() {
 
                             <div>
                               <p className="font-bold text-slate-800">
-                                {ad.brand_name || ad.company_name || "Brand"}
+                                {ad.brand_name ||
+                                  ad.company_name ||
+                                  "Brand"}
                               </p>
 
                               <p className="mt-1 max-w-[250px] truncate text-xs text-slate-500">
@@ -1264,13 +875,17 @@ export default function CreatePromotion() {
                         {/* FORMAT */}
 
                         <td className="px-5 py-4 text-sm capitalize text-slate-600">
-                          {String(ad.promotion_type || "—").replaceAll("_", " ")}
+                          {String(
+                            ad.promotion_type || "—"
+                          ).replaceAll("_", " ")}
                         </td>
 
                         {/* PLACEMENT */}
 
                         <td className="px-5 py-4 text-sm capitalize text-slate-600">
-                          {String(ad.placement || "—").replaceAll("_", " ")}
+                          {String(
+                            ad.placement || "—"
+                          ).replaceAll("_", " ")}
                         </td>
 
                         {/* SCHEDULE */}
@@ -1286,7 +901,10 @@ export default function CreatePromotion() {
                         {/* AMOUNT */}
 
                         <td className="px-5 py-4 text-sm font-bold text-slate-800">
-                          {money(ad.approved_amount ?? ad.amount_paid, ad.currency || "INR")}
+                          {money(
+                            ad.approved_amount ?? ad.amount_paid,
+                            ad.currency || "INR"
+                          )}
                         </td>
 
                         {/* PAYMENT */}
@@ -1346,7 +964,9 @@ export default function CreatePromotion() {
                                 <button
                                   type="button"
                                   disabled={isReviewing}
-                                  onClick={() => approvePromotion(ad)}
+                                  onClick={() =>
+                                    approvePromotion(ad)
+                                  }
                                   className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                                 >
                                   {isReviewing
@@ -1357,7 +977,9 @@ export default function CreatePromotion() {
                                 <button
                                   type="button"
                                   disabled={isReviewing}
-                                  onClick={() => openRejectModal(ad)}
+                                  onClick={() =>
+                                    openRejectModal(ad)
+                                  }
                                   className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50"
                                 >
                                   ✕ Reject
@@ -1365,29 +987,37 @@ export default function CreatePromotion() {
                               </div>
                             )}
 
-
-
                             {/* PAYMENT LINK */}
-                            {ad.status === "approved" && ad.payment_status !== "paid" && (
-                              <button
-                                type="button"
-                                disabled={isReviewing}
-                                onClick={() => generatePaymentLink(ad)}
-                                className="w-fit rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
-                              >
-                                {isReviewing ? "Processing..." : ad.payment_link_url ? "Generate new payment link" : "Generate payment link"}
-                              </button>
-                            )}
-                            {ad.payment_link_url && ad.payment_status !== "paid" && (
-                              <a
-                                href={ad.payment_link_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="w-fit text-xs font-semibold text-indigo-600 underline"
-                              >
-                                Open payment link
-                              </a>
-                            )}
+
+                            {ad.status === "approved" &&
+                              ad.payment_status !== "paid" && (
+                                <button
+                                  type="button"
+                                  disabled={isReviewing}
+                                  onClick={() =>
+                                    generatePaymentLink(ad)
+                                  }
+                                  className="w-fit rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                  {isReviewing
+                                    ? "Processing..."
+                                    : ad.payment_link_url
+                                      ? "Generate new payment link"
+                                      : "Generate payment link"}
+                                </button>
+                              )}
+
+                            {ad.payment_link_url &&
+                              ad.payment_status !== "paid" && (
+                                <a
+                                  href={ad.payment_link_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="w-fit text-xs font-semibold text-indigo-600 underline"
+                                >
+                                  Open payment link
+                                </a>
+                              )}
 
                             {/* ACTIVATION */}
 
@@ -1408,8 +1038,6 @@ export default function CreatePromotion() {
 
                               Active
                             </label>
-
-
                           </div>
                         </td>
                       </tr>
@@ -1420,13 +1048,17 @@ export default function CreatePromotion() {
             </div>
           )}
 
+          {/* DIRECTORY FOOTER */}
+
           <div className="flex flex-col justify-between gap-2 border-t border-slate-100 px-5 py-4 text-xs text-slate-400 sm:flex-row">
             <span>
               Showing {filteredAds.length} of {ads.length} promotions
             </span>
 
             <span>
-Only approved, paid, active campaigns should be shown publicly. Deactivation and deletion are omitted until matching backend routes are added.
+              Only approved, paid, active campaigns should be shown publicly.
+              Deactivation and deletion are omitted until matching backend
+              routes are added.
             </span>
           </div>
         </section>
@@ -1476,7 +1108,10 @@ Only approved, paid, active campaigns should be shown publicly. Deactivation and
               </div>
             </div>
 
-            <form onSubmit={rejectPromotion} className="space-y-5 p-6">
+            <form
+              onSubmit={rejectPromotion}
+              className="space-y-5 p-6"
+            >
               <div>
                 <label
                   htmlFor="rejection_reason"
@@ -1498,7 +1133,7 @@ Only approved, paid, active campaigns should be shown publicly. Deactivation and
                   rows={5}
                   autoFocus
                   placeholder="Explain why this promotion is being rejected..."
-                  className={inputClass}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
                 />
 
                 <div className="mt-2 flex justify-between gap-3 text-xs text-slate-400">
