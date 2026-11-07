@@ -6,11 +6,11 @@
 // Change backend URL only here.
 
 // Production:
-// export const BASE_URL =
-//   "https://back-end-project-group.onrender.com";
+export const BASE_URL =
+  "https://back-end-project-group.onrender.com";
 
 // Local development:
-export const BASE_URL = "http://localhost:5000";
+// export const BASE_URL = "http://localhost:5000";
 
 // ============================================
 // COMMON API REQUEST FUNCTION
