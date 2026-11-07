@@ -4,6 +4,48 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { adminLogin } from "../api.js";
 
+// ==========================================
+// NORMALIZE LOGIN RESPONSE
+// ==========================================
+
+function getLoginData(result) {
+  const data = result?.data || result;
+
+  const admin =
+    data?.admin ||
+    data?.user ||
+    result?.admin ||
+    null;
+
+  const token =
+    data?.token ||
+    data?.accessToken ||
+    result?.token ||
+    result?.accessToken ||
+    null;
+
+  return { admin, token };
+}
+
+// ==========================================
+// VALIDATE ADMIN SESSION
+// ==========================================
+
+function isValidAdmin(admin, token) {
+  const adminId = admin?.id || admin?._id;
+
+  return Boolean(
+    token &&
+    admin &&
+    adminId &&
+    ["gm", "admin"].includes(admin.role)
+  );
+}
+
+// ==========================================
+// COMPONENT
+// ==========================================
+
 function GMLogin() {
   const navigate = useNavigate();
 
@@ -13,31 +55,44 @@ function GMLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Reuse an existing admin session.
+  // ========================================
+  // CHECK EXISTING SESSION
+  // ========================================
+
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
     const savedAdmin = localStorage.getItem("admin");
 
-    if (token && savedAdmin) {
-      try {
-        const admin = JSON.parse(savedAdmin);
+    if (!token || !savedAdmin) {
+      return;
+    }
 
-        if (admin && typeof admin === "object") {
-          navigate("/admin/dashboard", { replace: true });
-        } else {
-          localStorage.removeItem("adminToken");
-          localStorage.removeItem("admin");
-        }
-      } catch {
-        // Clear invalid stored session data.
-        localStorage.removeItem("adminToken");
-        localStorage.removeItem("admin");
+    try {
+      const admin = JSON.parse(savedAdmin);
+
+      if (isValidAdmin(admin, token)) {
+        navigate("/admin/dashboard", { replace: true });
+        return;
       }
+
+      // Invalid or outdated session.
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("admin");
+    } catch (error) {
+      console.error("Invalid stored admin session:", error);
+
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("admin");
     }
   }, [navigate]);
 
+  // ========================================
+  // LOGIN
+  // ========================================
+
   const handleLogin = async (event) => {
     event.preventDefault();
+
     setError("");
 
     if (!username.trim() || !password) {
@@ -53,38 +108,113 @@ function GMLogin() {
         password,
       });
 
-      switch (result.status) {
-        case "login_success": {
-          if (!result.token || !result.admin) {
-            setError(
-              "The server returned an incomplete login response."
-            );
-            return;
-          }
+      console.log("========== ADMIN LOGIN RESPONSE ==========");
+      console.log(result);
+      console.log("==========================================");
 
-          // Store session information, never the password.
-          localStorage.setItem("adminToken", result.token);
-          localStorage.setItem(
-            "admin",
-            JSON.stringify(result.admin)
+      if (!result) {
+        setError("The server returned an empty response.");
+        return;
+      }
+
+      // --------------------------------------
+      // OTP REQUIRED
+      // --------------------------------------
+
+      if (result.status === "otp_required") {
+        const email =
+          result.email ||
+          result.data?.email;
+
+        if (email) {
+          localStorage.setItem("adminVerifyEmail", email);
+        }
+
+        navigate("/admin/verify-otp");
+        return;
+      }
+
+      // --------------------------------------
+      // LOGIN SUCCESS
+      // --------------------------------------
+
+      if (result.status === "login_success") {
+        const { admin: responseAdmin, token } =
+          getLoginData(result);
+
+        if (!responseAdmin || !token) {
+          console.error("Missing login data:", result);
+
+          setError(
+            "Login response is missing the administrator details or authentication token."
           );
 
-          navigate("/admin/dashboard", { replace: true });
-          break;
+          return;
         }
 
-        case "otp_required": {
-          if (result.email) {
-            localStorage.setItem(
-              "adminVerifyEmail",
-              result.email
-            );
-          }
+        const adminId =
+          responseAdmin.id || responseAdmin._id;
 
-          navigate("/admin/verify-otp");
-          break;
+        const normalizedAdmin = {
+          ...responseAdmin,
+
+          id: String(adminId),
+
+          role: responseAdmin.role,
+
+          responsibilities: Array.isArray(
+            responseAdmin.responsibilities
+          )
+            ? responseAdmin.responsibilities
+            : [],
+
+          must_change_password:
+            Boolean(responseAdmin.must_change_password),
+        };
+
+        if (!isValidAdmin(normalizedAdmin, token)) {
+          console.error(
+            "Invalid administrator login data:",
+            normalizedAdmin
+          );
+
+          setError(
+            "Your account information is incomplete or your administrator role is invalid. Please contact the system administrator."
+          );
+
+          return;
         }
 
+        // Clear any old session.
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("admin");
+
+        // Store the new session.
+        localStorage.setItem("adminToken", token);
+
+        localStorage.setItem(
+          "admin",
+          JSON.stringify(normalizedAdmin)
+        );
+
+        console.log("========== SAVED ADMIN SESSION ==========");
+        console.log(
+          JSON.parse(localStorage.getItem("admin"))
+        );
+        console.log("=========================================");
+
+        navigate("/admin/dashboard", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      // --------------------------------------
+      // LOGIN ERRORS
+      // --------------------------------------
+
+      switch (result.status) {
         case "invalid_credentials":
           setError("Invalid username or password.");
           break;
@@ -100,51 +230,65 @@ function GMLogin() {
           setError("Please enter both username and password.");
           break;
 
-        case "error":
-          setError(
-            result.message ||
-              "A server error occurred. Please try again later."
-          );
-          break;
-
         case "network_error":
           setError(
             result.message ||
-              "Unable to connect to the server. Please try again."
+              "Unable to connect to the server."
+          );
+          break;
+
+        case "error":
+          setError(
+            result.message ||
+              "A server error occurred. Please try again."
           );
           break;
 
         default:
           setError(
             result.message ||
-              "Login failed. Please check your credentials and try again."
+              "Login failed. Please check your credentials."
           );
       }
     } catch (err) {
       console.error("Admin login error:", err);
-      setError("Unable to complete login. Please try again.");
+
+      setError(
+        "Unable to complete login. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // ========================================
+  // UI
+  // ========================================
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 text-white">
-      {/* Background effects */}
+
+      {/* BACKGROUND */}
+
       <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
 
       <div className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
 
-      {/* Login card */}
+      {/* LOGIN CARD */}
+
       <motion.div
         initial={{ opacity: 0, y: 25, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45 }}
         className="relative z-10 w-full max-w-md"
       >
+
         <div className="rounded-3xl border border-white/10 bg-slate-900/90 p-7 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-10">
-          {/* Logo */}
+
+          {/* LOGO */}
+
           <div className="text-center">
+
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-400/20 bg-cyan-400/10 text-4xl shadow-lg shadow-cyan-900/10">
               🛡️
             </div>
@@ -160,9 +304,11 @@ function GMLogin() {
             <p className="mt-3 text-sm leading-6 text-slate-400">
               Sign in to access your authorized administration dashboard.
             </p>
+
           </div>
 
-          {/* Error message */}
+          {/* ERROR */}
+
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
@@ -177,10 +323,17 @@ function GMLogin() {
             </motion.div>
           )}
 
-          {/* Login form */}
-          <form onSubmit={handleLogin} className="mt-8 space-y-5">
-            {/* Username */}
+          {/* FORM */}
+
+          <form
+            onSubmit={handleLogin}
+            className="mt-8 space-y-5"
+          >
+
+            {/* USERNAME */}
+
             <div>
+
               <label
                 htmlFor="username"
                 className="mb-2 block text-sm font-semibold text-slate-300"
@@ -202,10 +355,13 @@ function GMLogin() {
                 required
                 className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3.5 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-60"
               />
+
             </div>
 
-            {/* Password */}
+            {/* PASSWORD */}
+
             <div>
+
               <label
                 htmlFor="password"
                 className="mb-2 block text-sm font-semibold text-slate-300"
@@ -214,6 +370,7 @@ function GMLogin() {
               </label>
 
               <div className="relative">
+
                 <input
                   id="password"
                   name="password"
@@ -238,15 +395,19 @@ function GMLogin() {
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
+
               </div>
+
             </div>
 
-            {/* Submit */}
+            {/* SUBMIT */}
+
             <button
               type="submit"
               disabled={loading}
               className="group flex w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-4 font-bold text-white shadow-lg shadow-blue-950/30 transition duration-300 hover:-translate-y-0.5 hover:shadow-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
+
               {loading ? (
                 <>
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -255,16 +416,21 @@ function GMLogin() {
               ) : (
                 <>
                   <span>Sign In</span>
+
                   <span className="transition-transform group-hover:translate-x-1">
                     →
                   </span>
                 </>
               )}
+
             </button>
+
           </form>
 
-          {/* Footer actions */}
+          {/* FOOTER */}
+
           <div className="mt-7 border-t border-white/10 pt-6">
+
             <button
               type="button"
               onClick={() => navigate("/")}
@@ -276,7 +442,9 @@ function GMLogin() {
             <p className="mt-6 text-center text-xs text-slate-600">
               © {new Date().getFullYear()} DWJD Administration Portal
             </p>
+
           </div>
+
         </div>
       </motion.div>
     </div>

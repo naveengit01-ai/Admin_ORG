@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { BASE_URL } from "../../api.js";
 
 // --------------------------------------------------
@@ -100,7 +101,10 @@ function Metric({ label, value, hint, icon }) {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+      whileHover={{ y: -5, scale: 1.015 }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: "spring", stiffness: 280, damping: 22 }}
+      className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_-18px_rgba(15,23,42,0.25)] transition-colors hover:border-indigo-200 hover:shadow-[0_18px_40px_-20px_rgba(79,70,229,0.28)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -129,6 +133,16 @@ function Metric({ label, value, hint, icon }) {
 
 export default function CreatePromotion() {
   const token = localStorage.getItem("adminToken");
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    // Return to the previous screen when possible; otherwise use the GM dashboard.
+    if (window.history.length > 2) {
+      navigate(-1);
+    } else {
+      navigate("/admin/dashboard");
+    }
+  };
 
   const [ads, setAds] = useState([]);
 
@@ -600,7 +614,12 @@ export default function CreatePromotion() {
   // --------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+      className="min-h-screen overflow-hidden bg-[radial-gradient(ellipse_at_top,_#e0e7ff_0%,_#f8fafc_42%,_#f1f5f9_100%)] text-slate-900"
+    >
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-7 lg:px-10">
 
         {/* HEADER */}
@@ -608,15 +627,17 @@ export default function CreatePromotion() {
         <motion.header
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-7 flex flex-col justify-between gap-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center"
+          transition={{ duration: 0.55, ease: "easeOut" }}
+          className="relative mb-7 flex flex-col justify-between gap-5 overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_-30px_rgba(30,41,59,0.35)] backdrop-blur-xl md:flex-row md:items-center md:p-8"
         >
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.15em] text-indigo-700">
+          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-indigo-100/70 blur-3xl" />
+          <div className="relative">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-indigo-700 ring-1 ring-indigo-100">
               <span className="h-2 w-2 rounded-full bg-indigo-500" />
               DWJD · Brand partnerships
             </div>
 
-            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+            <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-indigo-700 bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-4xl">
               Promotion Manager
             </h1>
 
@@ -626,17 +647,36 @@ export default function CreatePromotion() {
             </p>
           </div>
 
-          {/* ONLY REFRESH BUTTON */}
+          {/* HEADER ACTIONS */}
+          <div className="relative flex flex-wrap gap-3">
+            <motion.button
+              type="button"
+              onClick={handleBack}
+              whileHover={{ x: -3, scale: 1.02 }}
+              whileTap={{ scale: 0.96 }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+            >
+              <span aria-hidden="true" className="text-lg leading-none">←</span>
+              Back
+            </motion.button>
 
-          <div className="flex flex-wrap gap-3">
-            <button
+            <motion.button
               type="button"
               onClick={loadAds}
               disabled={loading}
-              className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              whileHover={{ y: -2, scale: 1.02 }}
+              whileTap={{ scale: 0.96 }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:from-indigo-700 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Refreshing…" : "↻ Refresh"}
-            </button>
+              <motion.span
+                animate={loading ? { rotate: 360 } : { rotate: 0 }}
+                transition={loading ? { repeat: Infinity, duration: 1, ease: "linear" } : { duration: 0.2 }}
+                aria-hidden="true"
+              >
+                ↻
+              </motion.span>
+              {loading ? "Refreshing…" : "Refresh"}
+            </motion.button>
           </div>
         </motion.header>
 
@@ -671,7 +711,15 @@ export default function CreatePromotion() {
 
         {/* DASHBOARD METRICS */}
 
-        <section className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <motion.section
+          initial="hidden"
+          animate="show"
+          variants={{
+            hidden: {},
+            show: { transition: { staggerChildren: 0.08, delayChildren: 0.08 } },
+          }}
+          className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
+        >
           <Metric
             label="Campaigns"
             value={ads.length}
@@ -706,11 +754,16 @@ export default function CreatePromotion() {
             hint={`${activeCount} active campaigns`}
             icon="₹"
           />
-        </section>
+        </motion.section>
 
         {/* CAMPAIGN DIRECTORY */}
 
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <motion.section
+          initial={{ opacity: 0, y: 22 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.15 }}
+          className="overflow-hidden rounded-[2rem] border border-white/80 bg-white/95 shadow-[0_20px_60px_-35px_rgba(15,23,42,0.35)] backdrop-blur"
+        >
           <div className="border-b border-slate-100 p-5 sm:p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
               <div>
@@ -830,9 +883,13 @@ export default function CreatePromotion() {
                     const isReviewing = reviewingId === id;
 
                     return (
-                      <tr
+                      <motion.tr
                         key={id}
-                        className="transition hover:bg-slate-50/70"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, delay: Math.min(index * 0.025, 0.25) }}
+                        whileHover={{ backgroundColor: "rgba(238,242,255,0.55)" }}
+                        className="transition-colors"
                       >
                         {/* BRAND */}
 
@@ -1040,7 +1097,7 @@ export default function CreatePromotion() {
                             </label>
                           </div>
                         </td>
-                      </tr>
+                      </motion.tr>
                     );
                   })}
                 </tbody>
@@ -1061,14 +1118,18 @@ export default function CreatePromotion() {
               routes are added.
             </span>
           </div>
-        </section>
+        </motion.section>
       </div>
 
       {/* REJECTION REASON MODAL */}
 
+      <AnimatePresence>
       {selectedAd && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-md"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               closeRejectModal();
@@ -1076,9 +1137,11 @@ export default function CreatePromotion() {
           }}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            initial={{ opacity: 0, scale: 0.92, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ type: "spring", stiffness: 260, damping: 24 }}
+            className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-[0_30px_100px_-25px_rgba(15,23,42,0.6)]"
           >
             <div className="border-b border-rose-100 bg-gradient-to-r from-rose-50 to-white p-6">
               <div className="flex items-start justify-between gap-4">
@@ -1170,8 +1233,9 @@ export default function CreatePromotion() {
               </div>
             </form>
           </motion.div>
-        </div>
+        </motion.div>
       )}
-    </div>
+      </AnimatePresence>
+    </motion.div>
   );
 }
