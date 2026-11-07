@@ -1,15 +1,16 @@
+
 // ============================================
 // DWJD - CENTRAL API CONFIGURATION
 // ============================================
 
-// Change the backend URL only here.
+// Change backend URL only here.
 
 // Production:
-export const BASE_URL =
-  "https://back-end-project-group.onrender.com";
+// export const BASE_URL =
+//   "https://back-end-project-group.onrender.com";
 
 // Local development:
-// export const BASE_URL = "http://localhost:5000";
+export const BASE_URL = "http://localhost:5000";
 
 // ============================================
 // COMMON API REQUEST FUNCTION
@@ -54,8 +55,10 @@ export const apiRequest = async (endpoint, options = {}) => {
 
     return {
       ...result,
+      ok: true,
       httpStatus: response.status,
     };
+
   } catch (error) {
     console.error("API Request Error:", error);
 
@@ -99,7 +102,10 @@ export const adminLogin = async (data) => {
     localStorage.setItem("adminToken", result.token);
 
     if (result.admin) {
-      localStorage.setItem("admin", JSON.stringify(result.admin));
+      localStorage.setItem(
+        "admin",
+        JSON.stringify(result.admin)
+      );
     }
   }
 
@@ -122,10 +128,17 @@ export const adminLogout = () => {
 // ============================================
 
 export const createRiderAccount = async (data) => {
+  const adminToken = getAdminToken();
+
+  if (!adminToken) {
+    return unauthorizedResponse();
+  }
+
   const result = await apiRequest("/admin/create-rider", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
     },
     body: JSON.stringify(data),
   });
@@ -163,10 +176,7 @@ export const createAdminAccount = async (data) => {
 
   return {
     ...result,
-    ok:
-      result.ok === true ||
-      result.status === "admin_created" ||
-      result.status === "admin_created_email_failed",
+    ok: result.status === "admin_created",
   };
 };
 
@@ -210,7 +220,7 @@ export const updateAdminStatus = async (adminId, isActive) => {
   }
 
   const result = await apiRequest(
-    `/admin/admins/${adminId}/status`,
+    `/admin/admins/${encodeURIComponent(adminId)}/status`,
     {
       method: "PATCH",
       headers: {
@@ -226,7 +236,7 @@ export const updateAdminStatus = async (adminId, isActive) => {
   return {
     ...result,
     ok:
-      result.ok === true ||
+      result.ok === true &&
       result.status === "success",
   };
 };
@@ -339,7 +349,8 @@ export const downloadAdminReportCSV = async (type) => {
     if (!response.ok) {
       const responseText = await response.text();
 
-      let message = `Failed to download report (HTTP ${response.status}).`;
+      let message =
+        `Failed to download report (HTTP ${response.status}).`;
 
       try {
         const result = responseText
@@ -351,7 +362,7 @@ export const downloadAdminReportCSV = async (type) => {
           result.error ||
           message;
       } catch {
-        // Preserve the fallback message for non-JSON responses.
+        // Keep fallback message.
       }
 
       return {
@@ -401,14 +412,14 @@ export const downloadAdminReportCSV = async (type) => {
       message: "Report downloaded successfully.",
       filename,
     };
+
   } catch (error) {
     console.error("CSV download error:", error);
 
     return {
       ok: false,
       status: "network_error",
-      message:
-        "Unable to download the report. Please try again.",
+      message: "Unable to download the report. Please try again.",
     };
   }
 };
@@ -419,14 +430,10 @@ export const downloadAdminReportCSV = async (type) => {
 // ============================================
 
 export const getRiderRequests = async () => {
-  const adminToken = localStorage.getItem("adminToken");
+  const adminToken = getAdminToken();
 
   if (!adminToken) {
-    return {
-      ok: false,
-      status: "unauthorized",
-      message: "Please log in again.",
-    };
+    return unauthorizedResponse();
   }
 
   const result = await apiRequest("/admin/rider-requests", {
@@ -454,14 +461,10 @@ export const reviewRiderRequest = async (
   status,
   rejectionReason = ""
 ) => {
-  const adminToken = localStorage.getItem("adminToken");
+  const adminToken = getAdminToken();
 
   if (!adminToken) {
-    return {
-      ok: false,
-      status: "unauthorized",
-      message: "Please log in again.",
-    };
+    return unauthorizedResponse();
   }
 
   if (!["approved", "rejected"].includes(status)) {
@@ -494,19 +497,15 @@ export const reviewRiderRequest = async (
 };
 
 // ============================================
-// CREATE RIDER ACCOUNT
+// CREATE RIDER ACCOUNT FROM REQUEST
 // POST /admin/rider-requests/:requestId/create-account
 // ============================================
 
 export const createRiderFromRequest = async (requestId) => {
-  const adminToken = localStorage.getItem("adminToken");
+  const adminToken = getAdminToken();
 
   if (!adminToken) {
-    return {
-      ok: false,
-      status: "unauthorized",
-      message: "Please log in again.",
-    };
+    return unauthorizedResponse();
   }
 
   const result = await apiRequest(
